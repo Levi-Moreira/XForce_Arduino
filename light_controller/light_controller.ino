@@ -9,7 +9,7 @@ volatile boolean zero_cross=0;   // Boolean to store a "switch" to tell us if we
 int AC_pin = 3;                  // Output to Opto Triac
 int dim = 0;                     // Dimming level (0-128)  0 = on, 128 = 0ff
 int freqStep = 65;               //Time for eatch step  = 8333/128
-
+int charNumber = 1;
 /*Variables to control the infrared*/
 int RECV_PIN = 11;               //Pin to receive the infrared data
 boolean enableIR = true;         //When the correct infrared packet has been reeived, disables the infrared communication
@@ -19,16 +19,19 @@ decode_results results;          //The results will be saved here
 /*Variables to control the bluetooth*/
 SoftwareSerial bluetooth(10, 9); /*RX and TX*/
 boolean receivedCommand = false;  //When received a command, this will be true. Used only for reseting the arduino when receiving command 256
-
+String cmd = "";  
 
 int RST = 8;                      //Sending low to this pin will reset the arduino
-int LED_BLUE = 7;                 //Blue led indicates that infrared has benn paired
-
+int LED_INFRA = 7;                 //Blue led indicates that infrared has benn paired
+int EN_BT = 5;
 
 
 /*Preconfigurations, this will be run only once*/
 void setup() {
   digitalWrite(RST,HIGH);                           //Imediatly pull reset pin to high, otherwise it will be reseting all the time
+  digitalWrite(EN_BT,LOW);
+  
+  cmd.reserve(6);
 
   pinMode(AC_pin, OUTPUT);                          // Set the Triac pin as output
   attachInterrupt(0, zero_cross_detect, RISING);    // Attach an Interupt to Pin 2 (interupt 0) for Zero Cross Detection
@@ -36,11 +39,13 @@ void setup() {
   Timer1.attachInterrupt(dim_check, freqStep); 
   
   pinMode(RST,OUTPUT);
-  pinMode(LED_BLUE,OUTPUT);
+  pinMode(LED_INFRA,OUTPUT);
+  pinMode(EN_BT,OUTPUT);
   /*Setup the serial to communicate with the bt module*/
   bluetooth.begin(38400);  
-  bluetooth.println("XFORCE: Light controller"); 
-  digitalWrite(LED_BLUE,LOW);
+  Serial.begin(9600);
+  Serial.println("XFORCE: Light controller"); 
+  digitalWrite(LED_INFRA,LOW);
   irrecv.enableIRIn(); // Start the receiver      
 }
 
@@ -65,16 +70,14 @@ void loop() {
   }
 }
 
-/*When something is detected in the serial*/
 void serialEvent() {
   while (bluetooth.available()) {
-    int inputChar = (int)bluetooth.parseInt();
-    if (inputChar == 256) {
+    char inputChar = (char)bluetooth.read();
+    cmd += inputChar;
+    if (inputChar == '\n' || inputChar=='%') {
       receivedCommand = true;
-    }else
-    {
-      dim = inputChar;
-      }
+      
+    }
   }
 }
 
@@ -83,20 +86,66 @@ void treatIRReceive()
 {
        if(results.value == 0x681cded5)
        {
-         bluetooth.println(0x02,HEX);
          enableIR = false;  
-         digitalWrite(LED_BLUE,HIGH);
+         digitalWrite(LED_INFRA,HIGH);
+         digitalWrite(EN_BT,HIGH);
        }
        irrecv.resume(); // Receive the next value  
 }
 
-/*When a reset command has been received*/
 void onCommandReceived()
 {
+    int neither = 0;
     receivedCommand = false;
-    bluetooth.print("Received command Reset ");    
-    digitalWrite(RST,LOW);
+    cmd.toUpperCase();
+    
+    String rec =cmd.substring(0,4);
+    Serial.print("Received command: ");    
+    Serial.println(rec); 
+    
 
+      if(rec=="CMDI")
+      {
+        bluetooth.println("CMDL%");
+        neither = 1;
+      }
+
+      if(rec=="CMDR")
+      {
+           digitalWrite(EN_BT,LOW);
+           digitalWrite(LED_INFRA,LOW);
+           bluetooth.flush();
+           results.value = 0x00;
+           enableIR = true;
+           neither = 1;
+      }
+      if(rec=="CMDS")
+      {
+        char answer[6];
+        sprintf(answer,"S%d%%",charNumber);
+        Serial.println(answer);
+        bluetooth.println(answer);
+        neither = 1;
+      }
+    
+
+    if(!neither)
+    {
+      String newString = cmd.substring(3,6);
+      Serial.println(newString);
+
+      if((newString.indexOf("C")==-1) && (newString.indexOf("M")==-1) &&(newString.indexOf("D")==-1))
+      {
+        charNumber = newString.toInt();
+        Serial.print("Received a Number: ");
+        Serial.println(charNumber);
+        if(charNumber>128) charNumber = 128;
+        if(charNumber<1) charNumber = 1;
+        dim = charNumber;
+      }
+    }
+    cmd = "";
+    i = 1;
 }
 
 /*Interrupt for when a zero crossing is detected in pin 2*/

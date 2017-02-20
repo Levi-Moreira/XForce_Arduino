@@ -14,26 +14,32 @@ boolean receivedCommand = false;
 
 
 int i = 1;
-
+int RST = 3;
+int EN_BT = 8;
+int LED_INFRA = 7;
+int RELAY_EN = 12;
 
 void setup()
 {
-  digitalWrite(8,HIGH);
+  digitalWrite(RST,HIGH);
+  digitalWrite(EN_BT,LOW);
   /*Saves 4 bytes for the received commands*/
   cmd.reserve(4);
 
   /*Start the pin as output for the transistor that turn the relay on and off*/
-  pinMode(2,OUTPUT);
+  pinMode(RELAY_EN,OUTPUT);
   
   /*The LED of the board will imitate the LED of the relay*/
   pinMode(13,OUTPUT);
 
-  pinMode(8,OUTPUT);
-  pinMode(7,OUTPUT);
+  pinMode(RST,OUTPUT);
+  pinMode(LED_INFRA,OUTPUT);
+  pinMode(EN_BT,OUTPUT);
   /*Setup the serial to communicate with the bt module*/
   bluetooth.begin(38400);  
-  bluetooth.println("XFORCE: Door controller"); 
-  digitalWrite(7,LOW);
+  Serial.begin(9600);
+  Serial.println("XFORCE: Door controller"); 
+  digitalWrite(LED_INFRA,LOW);
   irrecv.enableIRIn(); // Start the receiver
 }
 
@@ -64,9 +70,9 @@ void treatIRReceive()
     
        if(results.value == 0x681cded5)
        {
-         bluetooth.println(0x01,HEX);
          enableIR = false;  
-         digitalWrite(7,HIGH);
+         digitalWrite(LED_INFRA,HIGH);
+         digitalWrite(EN_BT,HIGH);
        }
        irrecv.resume(); // Receive the next value  
 }
@@ -76,30 +82,40 @@ void onCommandReceived()
     cmd.toUpperCase();
     
     cmd=cmd.substring(0,4);
-    bluetooth.print("Received command: ");    
-    bluetooth.println(cmd); 
+    Serial.print("Received command: ");    
+    Serial.println(cmd); 
     
     if(cmd=="CMD1")
     {
   
-      bluetooth.println("Turn on");
-      digitalWrite(2,HIGH);  
+      Serial.println("Turn on");
+      digitalWrite(RELAY_EN,HIGH);  
       digitalWrite(13,HIGH);
       while(i<=3)
       {
-        bluetooth.println(i++);
+        Serial.println(i++);
         delay(1000);  
       }
       
-      bluetooth.println("Turn off");
-      digitalWrite(2,LOW);  
+      Serial.println("Turn off");
+      digitalWrite(RELAY_EN,LOW);  
       digitalWrite(13,LOW);
       
     } 
 
     if(cmd=="CMDR")
     {
-       digitalWrite(8,LOW);
+       digitalWrite(RST,LOW);
+     }
+
+     if(cmd=="CMDS")
+      {
+        digitalWrite(LED_INFRA,LOW);
+     }
+
+     if(cmd=="CMDI")
+     {
+       bluetooth.println("CMDD%");
      }
     cmd = "";
     i = 1;
@@ -108,8 +124,10 @@ void serialEvent() {
   while (bluetooth.available()) {
     char inputChar = (char)bluetooth.read();
     cmd += inputChar;
+    Serial.println(inputChar);
     if (inputChar == '\n' || inputChar=='%') {
       receivedCommand = true;
+      
     }
   }
 }

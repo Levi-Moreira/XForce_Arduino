@@ -23,28 +23,30 @@ boolean receivedCommand = false;  //When received a command, this will be true. 
 String cmd = "";  
 
 int RST = 8;                      //Sending low to this pin will reset the arduino
-int LED_INFRA = 13;                 //Blue led indicates that infrared has benn paired
-int EN_BT = 12;
+int LED_INFRA = 13;               //Blue led indicates that infrared has benn paired
+int EN_BT = 12;                   //Enable bluetooth pin
 
 
 /*Preconfigurations, this will be run only once*/
 void setup() {
   digitalWrite(RST,HIGH);                           //Imediatly pull reset pin to high, otherwise it will be reseting all the time
-  digitalWrite(EN_BT,LOW);
-  digitalWrite(AC_pin,HIGH);
+  digitalWrite(EN_BT,LOW);                          //turn off bluetooth
+  digitalWrite(AC_pin,HIGH);                        //turn on lights
   cmd.reserve(6);
 
   pinMode(AC_pin, OUTPUT);                          // Set the Triac pin as output
   attachInterrupt(0, zero_cross_detect, RISING);    // Attach an Interupt to Pin 2 (interupt 0) for Zero Cross Detection
   Timer1.initialize(freqStep);                      // Initialize TimerOne library for the freq we need
-  Timer1.attachInterrupt(dim_check, freqStep); 
-  
+  Timer1.attachInterrupt(dim_check, freqStep);      // initilize the time interrupt
+
+  /*Configure ports as outputs*/
   pinMode(RST,OUTPUT);
   pinMode(LED_INFRA,OUTPUT);
   pinMode(EN_BT,OUTPUT);
+  
   /*Setup the serial to communicate with the bt module*/
   bluetooth.begin(38400);  
-  Serial.begin(9600);
+  Serial.begin(9600); //hardware serial for debug
   Serial.println("XFORCE: Light controller"); 
   digitalWrite(LED_INFRA,LOW);
   irrecv.enableIRIn(); // Start the receiver      
@@ -53,24 +55,29 @@ void setup() {
 /*Main loop*/
 void loop() {                        
 
+  //something new at the serial interface?
   if(bluetooth.available())
   {
     serialEvent();
   }
 
+  //is the infrared enabled?
   if(enableIR)
   {
+    //something new at the infrared interface
     if (irrecv.decode(&results)) {
      treatIRReceive();
     }
   }
 
+  //a new command was received?
   if(receivedCommand)
   {
     onCommandReceived();
   }
 }
 
+/*Treats the receiving of a character through the serial-bluetooth interface*/
 void serialEvent() {
   while (bluetooth.available()) {
     char inputChar = (char)bluetooth.read();
@@ -85,33 +92,41 @@ void serialEvent() {
 /*When a infrared packet has been detected in the buffer*/
 void treatIRReceive()
 {
+       //if it contains the right code
        if(results.value == 0x681cded5)
        {
+         //disable the reeiving of more ifnrared packets for now
          enableIR = false;  
+
+         //turn on the indication led
          digitalWrite(LED_INFRA,HIGH);
+
+         //enable bluetooth
          digitalWrite(EN_BT,HIGH);
        }
        irrecv.resume(); // Receive the next value  
 }
 
+/*When some new command was received*/
 void onCommandReceived()
 {
     int neither = 0;
     receivedCommand = false;
     cmd.toUpperCase();
-    
+
+  
     String rec =cmd.substring(0,4);
     Serial.print("Received command: ");    
     Serial.println(rec); 
     
-
+      //in case it's the indentify command
       if(rec=="CMDI")
       {
         bluetooth.println("CMDL%");
         neither = 1;
       }
 
-
+      //in case it's the restart command
       if(rec=="CMDR")
       {
            digitalWrite(EN_BT,LOW);
@@ -121,6 +136,8 @@ void onCommandReceived()
            enableIR = true;
            neither = 1;
       }
+
+      //in case it's the light step command
       if(rec=="CMDS")
       {
         char answer[6];
@@ -131,6 +148,7 @@ void onCommandReceived()
       }
     
 
+    //only when it's a number command
     if(!neither)
     {
       String newString = cmd.substring(3,6);

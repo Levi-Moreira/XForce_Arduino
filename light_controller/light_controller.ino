@@ -10,6 +10,7 @@ int AC_pin = 3;                  // Output to Opto Triac
 int dim = 0;                     // Dimming level (0-128)  0 = on, 128 = 0ff
 int freqStep = 65;               //Time for eatch step  = 8333/128
 int charNumber = 1;
+
 /*Variables to control the infrared*/
 int RECV_PIN = 11;               //Pin to receive the infrared data
 boolean enableIR = true;         //When the correct infrared packet has been reeived, disables the infrared communication
@@ -22,15 +23,15 @@ boolean receivedCommand = false;  //When received a command, this will be true. 
 String cmd = "";  
 
 int RST = 8;                      //Sending low to this pin will reset the arduino
-int LED_INFRA = 7;                 //Blue led indicates that infrared has benn paired
-int EN_BT = 5;
+int LED_INFRA = 13;                 //Blue led indicates that infrared has benn paired
+int EN_BT = 12;
 
 
 /*Preconfigurations, this will be run only once*/
 void setup() {
   digitalWrite(RST,HIGH);                           //Imediatly pull reset pin to high, otherwise it will be reseting all the time
   digitalWrite(EN_BT,LOW);
-  
+  digitalWrite(AC_pin,HIGH);
   cmd.reserve(6);
 
   pinMode(AC_pin, OUTPUT);                          // Set the Triac pin as output
@@ -110,6 +111,7 @@ void onCommandReceived()
         neither = 1;
       }
 
+
       if(rec=="CMDR")
       {
            digitalWrite(EN_BT,LOW);
@@ -153,6 +155,7 @@ void zero_cross_detect() {
   zero_cross = true;               // set the boolean to true to tell our dimming function that a zero cross has occured
   i=0;
   digitalWrite(AC_pin, LOW);       // turn off TRIAC (and AC)
+  //Serial.println("Detect zero");
 }                                 
 
 /*Turn on the TRIAC at the appropriate time*/
